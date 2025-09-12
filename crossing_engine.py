@@ -249,6 +249,12 @@ class PortfolioCrossingEngine:
                     # If buyer is fully satisfied, move to next buyer
                     if remaining_quantities[buyer_portfolio] <= 0:
                         break
+
+
+                ## Note:
+                    ## Seller continuation: 
+                    ## Inside the inner loop, after a partial cross, the code proceeds to the next seller even if the current seller still has inventory. 
+                    # If you want to exhaust the current priority seller before moving on, loop while the current seller has remaining supply
         
         # Create remaining trades
         remaining_trades = []
@@ -412,7 +418,32 @@ class PortfolioCrossingEngine:
             })
         
         return pd.DataFrame(data)
+    
+    def print_crossing_summary(self, crossing_result: CrossingResult):
+        """Print to Consol Crossing Analysis Summary"""
+        print("=== CROSSING ANALYSIS SUMMARY ===")
+        summary = crossing_result.crossing_summary
 
+        print(f"Portfolio Analysis:")
+        print(f"  Total portfolios processed: {summary['total_portfolios']}")
+
+        print(f"\nOriginal Trade Data:")
+        print(f"  Original trade count: {summary['original_trade_count']:,}")
+        print(f"  Original volume: {summary['original_volume']:,.0f}")
+
+        print(f"\nCrossing Results:")
+        print(f"  Crossed trade count: {summary['crossed_trade_count']:,}")
+        print(f"  Crossed volume: {summary['crossed_volume']:,.0f}")
+        print(f"  Crossing rate: {summary['crossing_rate']:.1%}")
+        print(f"  Volume reduction: {summary['volume_reduction']:,.0f}")
+
+        print(f"\nRemaining Trades:")
+        print(f"  Remaining trade count: {summary['remaining_trade_count']:,}")
+        print(f"  Remaining volume: {summary['remaining_volume']:,.0f}")
+
+        print(f"\nSecurity Analysis:")
+        print(f"  Securities with crosses: {summary['securities_with_crosses']}")
+        print(f"  Securities needing external liquidity: {summary['securities_needing_external_liquidity']}")
 
 
 

@@ -90,8 +90,16 @@ class PortfolioVisualizationManager:
             charts['box_whisker'] = self.create_box_whisker_plot()
             charts['parallel_coordinates'] = self.create_parallel_coordinates()
             charts['sunburst'] = self.create_sunburst_chart()
-            charts['sankey'] = self.create_sankey_diagram()
+            charts['sankey'] = self.create_sankey_diagram(0.0001)
             charts['radar'] = self.create_radar_chart()
+            charts['scatter_matrix'] = self.create_scatter_matrix()
+            charts['side_by_side_bars'] = self.create_side_by_side_bars()
+            charts['waterfall_changes_only'] = self.create_waterfall_changes_only(0.0001)
+            charts['waterfall_interactive'] = self.create_interactive_waterfall_chart(0.0001)
+            charts['sector_sankey'] = self.create_enhanced_sankey_sectors()
+            charts['arrow_plot'] = self.create_arrow_plot(0.0004)
+            charts['tolerance_bands'] = self.create_tolerance_band_chart(0.25)
+            charts['deviation_histogram'] = self.create_deviation_histogram()
             
             self.logger.info(f"Generated {len(charts)} charts for portfolio {self.portfolio_id}")
             
