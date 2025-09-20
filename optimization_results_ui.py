@@ -197,6 +197,10 @@ class OptimizationResultsUI:
             metadata_df = pd.DataFrame(list(metadata.items()), columns=['Property', 'Value'])
             display(HTML("<h4>Execution Metadata</h4>"))
             display(metadata_df)
+            
+            # Security Replacement
+            display(HTML("<h4> Security Restriction/Replacement</h4>"))
+            display(result.replacements_found)
     
     def _update_goals_section(self, result: OptimizationResult):
         """Update goals section."""

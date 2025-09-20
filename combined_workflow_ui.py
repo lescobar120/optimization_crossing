@@ -3,61 +3,69 @@ from IPython.display import display
 from typing import Dict, Optional, Any
 import logging
 
-# Import the individual UI components
-from portfolio_config_ui import PortfolioConfigUI, create_portfolio_config_ui
-from optimization_results_ui import OptimizationResultsUI, create_optimization_results_ui
-from crossing_results_ui import CrossingResultsUI, create_crossing_results_ui
-from dashboard_manager import UnifiedDashboardManager, create_mixed_dashboard
+# Import the enhanced UI components
+from portfolio_config_ui import PortfolioConfigUI  # This is the enhanced v11 version
+from optimization_results_ui import OptimizationResultsUI, create_analysis_results_for_batch
+from crossing_results_ui import CrossingResultsUI
+from dashboard_manager import UnifiedDashboardManager
 
 # Import data structures
 from orchestrator import OptimizationResult
-from portfolio_analytics_engine import PortfolioComparisonResult
+from portfolio_analytics_engine import PortfolioComparisonResult, PortfolioAnalyticsEngine
 from crossing_engine import CrossingResult
 from portfolio_configs import PortfolioConfigManager
+from workflow_state import WorkflowState
+
+# Import visualization managers for chart generation
+try:
+    from plot_manager import PortfolioVisualizationManager
+    from crossing_visualization_manager import CrossingVisualizationManager
+    CHARTS_AVAILABLE = True
+except ImportError:
+    CHARTS_AVAILABLE = False
+    logging.warning("Chart visualization managers not available")
 
 class ComprehensiveWorkflowUI:
     """
-    Comprehensive tabbed UI for the complete portfolio optimization and crossing workflow.
+    Enhanced workflow UI with reactive tab building.
     
-    Provides four main tabs:
-    1. Configuration - Portfolio settings and parameters
-    2. Optimization Results - Detailed optimization output and analysis
-    3. Crossing Results - Trade crossing analysis and external liquidity needs
-    4. Charts Dashboard - Interactive visualization dashboard
+    Features:
+    - Tab 1: Enhanced config UI with execution capabilities
+    - Tabs 2-4: Dynamically built when data becomes available
+    - Automatic chart generation and dashboard updates
     """
     
     def __init__(self, 
                  config_manager: Optional[PortfolioConfigManager] = None,
-                 optimization_results: Optional[Dict[str, OptimizationResult]] = None,
-                 analysis_results: Optional[Dict[str, PortfolioComparisonResult]] = None,
-                 crossing_result: Optional[CrossingResult] = None,
-                 crossing_charts: Optional[Dict[str, Any]] = None,
-                 portfolio_charts: Optional[Dict[str, Any]] = None):
+                 report_handler=None,
+                 orchestrator=None,
+                 crossing_engine=None):
         """
         Initialize the comprehensive workflow UI.
         
         Args:
             config_manager: Optional existing PortfolioConfigManager
-            optimization_results: Optional optimization results to pre-load
-            analysis_results: Optional analysis results to pre-load
-            crossing_result: Optional crossing result to pre-load
-            crossing_charts: Optional crossing charts to pre-load
-            portfolio_charts: Optional portfolio charts to pre-load
+            report_handler: ReportHandler instance for data retrieval
+            orchestrator: OptimizationOrchestrator instance
+            crossing_engine: PortfolioCrossingEngine instance
         """
-        self.config_manager = config_manager
-        self.logger = logging.getLogger(__name__)
+        self.report_handler = report_handler
+        self.orchestrator = orchestrator
+        self.crossing_engine = crossing_engine
         
-        # Data storage for results
-        self.optimization_results = optimization_results or {}
-        self.analysis_results = analysis_results or {}
-        self.crossing_result = crossing_result
+        # Initialize workflow state for sharing data
+        self.workflow_state = WorkflowState()
         
-        # Charts data
-        self.charts_data = {}
-        if crossing_charts:
-            self.charts_data['crossing'] = crossing_charts
-        if portfolio_charts:
-            self.charts_data['portfolio'] = portfolio_charts
+        # Initialize analytics engine for generating analysis results
+        self.analytics_engine = PortfolioAnalyticsEngine()
+        
+        # Create UI callbacks dictionary
+        self.ui_callbacks = {
+            'build_optimization_ui': self._build_optimization_ui,
+            'build_crossing_ui': self._build_crossing_ui, 
+            'build_charts_dashboard': self._build_charts_dashboard,
+            'clear_all_tabs': self._clear_all_tabs
+        }
         
         # UI component references
         self.config_ui = None
@@ -65,281 +73,381 @@ class ComprehensiveWorkflowUI:
         self.crossing_ui = None
         self.dashboard_ui = None
         
-        # Create main UI structure
-        self._create_main_interface()
-    
-    def _create_main_interface(self):
-        """Create the main tabbed interface using VBox containers."""
+        self.logger = logging.getLogger(__name__)
         
-        # Create content containers for each tab
-        self.config_container = self._create_config_tab()
-        self.optimization_container = self._create_optimization_tab()
-        self.crossing_container = self._create_crossing_tab()
-        self.dashboard_container = self._create_dashboard_tab()
+        # Create main UI structure
+        self._create_main_interface(config_manager)
+    
+    def _create_main_interface(self, config_manager):
+        """Create the main tabbed interface with enhanced config UI."""
+        
+        # Tab 1: Enhanced Configuration UI with execution capabilities
+        self.config_container = self._create_enhanced_config_tab(config_manager)
+        
+        # Tabs 2-4: Start as placeholders
+        self.optimization_container = self._create_placeholder_tab(
+            "Optimization Results", 
+            "Configure portfolios and run optimization to view results here."
+        )
+        
+        self.crossing_container = self._create_placeholder_tab(
+            "Crossing Results",
+            "Run crossing analysis after optimization to view trade crossing opportunities."
+        )
+        
+        self.dashboard_container = self._create_placeholder_tab(
+            "Charts Dashboard",
+            "Interactive charts will be available after running optimization and crossing analysis."
+        )
         
         # Create tab widget
         self.tabs = widgets.Tab([
             self.config_container,
-            self.optimization_container,
+            self.optimization_container, 
             self.crossing_container,
             self.dashboard_container
         ])
         
-        # Set tab titles with checkmarks for available data
+        # Set initial tab titles
         self._update_tab_titles()
         
-        # Create main container with header
+        # Create main container
         self.main_container = widgets.VBox([
             widgets.HTML("<h1>Portfolio Optimization & Crossing Workflow</h1>"),
             widgets.HTML("<hr>"),
             self.tabs
         ])
     
-    def _create_config_tab(self) -> widgets.VBox:
-        """Create the configuration tab content."""
-        if self.config_ui is None:
-            self.config_ui = PortfolioConfigUI(self.config_manager)
-            if self.config_manager is None:
-                self.config_manager = self.config_ui.get_config_manager()
+    def _create_enhanced_config_tab(self, config_manager) -> widgets.VBox:
+        """Create the enhanced configuration tab with execution capabilities."""
+        
+        # Create enhanced config UI with all execution components
+        self.config_ui = PortfolioConfigUI(
+            config_manager=config_manager,
+            report_handler=self.report_handler,
+            orchestrator=self.orchestrator,
+            crossing_engine=self.crossing_engine,
+            workflow_state=self.workflow_state,
+            ui_callbacks=self.ui_callbacks
+        )
         
         return widgets.VBox([self.config_ui.main_layout])
     
-    def _create_optimization_tab(self) -> widgets.VBox:
-        """Create the optimization results tab content."""
-        if not self.optimization_results:
-            return widgets.VBox([
-                widgets.HTML("""
-                    <div style='text-align: center; padding: 50px; color: #666;'>
-                        <h3>No Optimization Results Available</h3>
-                        <p>Run portfolio optimization to view results here.</p>
-                        <p>Use the <code>update_optimization_results()</code> method to populate this tab.</p>
-                    </div>
-                """)
-            ])
-        else:
-            if self.optimization_ui is None:
-                self.optimization_ui = OptimizationResultsUI(
-                    self.optimization_results, 
-                    self.analysis_results
-                )
-            return widgets.VBox([self.optimization_ui.main_widget])
-    
-    def _create_crossing_tab(self) -> widgets.VBox:
-        """Create the crossing results tab content."""
-        if self.crossing_result is None:
-            return widgets.VBox([
-                widgets.HTML("""
-                    <div style='text-align: center; padding: 50px; color: #666;'>
-                        <h3>No Crossing Results Available</h3>
-                        <p>Run crossing analysis to view results here.</p>
-                        <p>Use the <code>update_crossing_results()</code> method to populate this tab.</p>
-                    </div>
-                """)
-            ])
-        else:
-            if self.crossing_ui is None:
-                self.crossing_ui = CrossingResultsUI(self.crossing_result)
-            return widgets.VBox([self.crossing_ui.main_widget])
-    
-    def _create_dashboard_tab(self) -> widgets.VBox:
-        """Create the charts dashboard tab content."""
-        if not self.charts_data:
-            return widgets.VBox([
-                widgets.HTML("""
-                    <div style='text-align: center; padding: 50px; color: #666;'>
-                        <h3>No Charts Available</h3>
-                        <p>Generate analysis charts to view dashboard here.</p>
-                        <p>Use the <code>update_charts_data()</code> method to populate this tab.</p>
-                    </div>
-                """)
-            ])
-        else:
-            if self.dashboard_ui is None:
-                self.dashboard_ui = UnifiedDashboardManager(
-                    chart_sources=self.charts_data,
-                    dashboard_title="Comprehensive Analysis Dashboard"
-                )
-            return widgets.VBox([self.dashboard_ui.dashboard])
+    def _create_placeholder_tab(self, title: str, message: str) -> widgets.VBox:
+        """Create placeholder tab content."""
+        return widgets.VBox([
+            widgets.HTML(f"""
+                <div style='text-align: center; padding: 50px; color: #666;'>
+                    <h3>{title} - Not Available Yet</h3>
+                    <p>{message}</p>
+                </div>
+            """)
+        ])
     
     def _update_tab_titles(self):
-        """Update tab titles to show data availability."""
-        self.tabs.set_title(0, "1. Configuration")
+        """Update tab titles to show data availability status."""
         
-        opt_title = "2. Optimization Results"
-        if self.optimization_results:
-            opt_title += ""
-        self.tabs.set_title(1, opt_title)
+        # Tab 1: Always available
+        self.tabs.set_title(0, "1. Configuration & Execution")
         
-        crossing_title = "3. Crossing Results"
-        if self.crossing_result:
-            crossing_title += ""
-        self.tabs.set_title(2, crossing_title)
+        # Tab 2: Optimization results
+        if self.workflow_state.is_ready_for_optimization_ui():
+            self.tabs.set_title(1, "2. Optimization Results ✓")
+        else:
+            self.tabs.set_title(1, "2. Optimization Results")
         
-        charts_title = "4. Charts Dashboard"
-        if self.charts_data:
-            charts_title += ""
-        self.tabs.set_title(3, charts_title)
+        # Tab 3: Crossing results  
+        if self.workflow_state.is_ready_for_crossing_ui():
+            self.tabs.set_title(2, "3. Crossing Results ✓")
+        else:
+            self.tabs.set_title(2, "3. Crossing Results")
+        
+        # Tab 4: Charts dashboard
+        if self.workflow_state.is_ready_for_charts_dashboard():
+            self.tabs.set_title(3, "4. Charts Dashboard ✓")
+        else:
+            self.tabs.set_title(3, "4. Charts Dashboard")
     
-    def update_optimization_results(self, 
-                                  batch_results: Dict[str, OptimizationResult],
-                                  analysis_results: Optional[Dict[str, PortfolioComparisonResult]] = None):
-        """
-        Update optimization results data and refresh the tab.
+    # === UI CALLBACK METHODS (Called by enhanced config UI) ===
+    
+    def _build_optimization_ui(self):
+        """Build optimization results UI when data becomes available."""
+        try:
+            self.logger.info("Building optimization results UI...")
+            
+            # Get data from workflow state
+            batch_results = self.workflow_state.optimization_results
+            analysis_results = self.workflow_state.analysis_results
+            
+            if not batch_results:
+                self.logger.warning("No optimization results available for UI building")
+                return
+            
+            # Create optimization results UI
+            self.optimization_ui = OptimizationResultsUI(batch_results, analysis_results)
+            
+            # Replace placeholder with real UI
+            self.optimization_container = widgets.VBox([self.optimization_ui.main_widget])
+            
+            # Update the tab
+            tab_children = list(self.tabs.children)
+            tab_children[1] = self.optimization_container
+            self.tabs.children = tab_children
+            
+            # Update tab titles
+            self._update_tab_titles()
+            
+            # Generate charts if visualization managers are available
+            if CHARTS_AVAILABLE:
+                self._generate_portfolio_charts(batch_results, analysis_results)
+            
+            self.logger.info(f"Optimization UI built successfully for {len(batch_results)} portfolios")
+            
+        except Exception as e:
+            self.logger.error(f"Error building optimization UI: {str(e)}")
+            self._show_error_in_tab(1, f"Error loading optimization results: {str(e)}")
+    
+    def _build_crossing_ui(self):
+        """Build crossing results UI when data becomes available."""
+        try:
+            self.logger.info("Building crossing results UI...")
+            
+            # Get crossing result from workflow state
+            crossing_result = self.workflow_state.crossing_result
+            
+            if not crossing_result:
+                self.logger.warning("No crossing result available for UI building")
+                return
+            
+            # Create crossing results UI
+            self.crossing_ui = CrossingResultsUI(crossing_result)
+            
+            # Replace placeholder with real UI
+            self.crossing_container = widgets.VBox([self.crossing_ui.main_widget])
+            
+            # Update the tab
+            tab_children = list(self.tabs.children)
+            tab_children[2] = self.crossing_container
+            self.tabs.children = tab_children
+            
+            # Update tab titles
+            self._update_tab_titles()
+            
+            # Generate crossing charts if visualization managers are available
+            if CHARTS_AVAILABLE:
+                self._generate_crossing_charts(crossing_result)
+            
+            self.logger.info("Crossing UI built successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Error building crossing UI: {str(e)}")
+            self._show_error_in_tab(2, f"Error loading crossing results: {str(e)}")
+    
+    def _build_charts_dashboard(self):
+        """Build charts dashboard when chart data becomes available."""
+        try:
+            self.logger.info("Building charts dashboard...")
+            
+            # Get available charts from workflow state
+            combined_charts = self.workflow_state.get_combined_charts()
+            
+            if not combined_charts:
+                self.logger.warning("No charts available for dashboard building")
+                return
+            
+            # Create dashboard with available charts
+            self.dashboard_ui = UnifiedDashboardManager(
+                chart_sources=combined_charts,
+                dashboard_title="Comprehensive Analysis Dashboard"
+            )
+            
+            # Replace placeholder with dashboard
+            self.dashboard_container = widgets.VBox([self.dashboard_ui.dashboard])
+            
+            # Update the tab
+            tab_children = list(self.tabs.children)
+            tab_children[3] = self.dashboard_container
+            self.tabs.children = tab_children
+            
+            # Update tab titles
+            self._update_tab_titles()
+            
+            chart_count = sum(len(charts) for charts in combined_charts.values())
+            self.logger.info(f"Charts dashboard built successfully with {chart_count} charts")
+            
+        except Exception as e:
+            self.logger.error(f"Error building charts dashboard: {str(e)}")
+            self._show_error_in_tab(3, f"Error loading charts dashboard: {str(e)}")
+    
+    def _clear_all_tabs(self):
+        """Clear all result tabs back to placeholder state (called on errors)."""
+        try:
+            self.logger.info("Clearing all result tabs...")
+            
+            # Reset to placeholders
+            self.optimization_container = self._create_placeholder_tab(
+                "Optimization Results",
+                "Optimization failed or was reset. Configure and run optimization again."
+            )
+            
+            self.crossing_container = self._create_placeholder_tab(
+                "Crossing Results", 
+                "No crossing data available. Run optimization first, then crossing analysis."
+            )
+            
+            self.dashboard_container = self._create_placeholder_tab(
+                "Charts Dashboard",
+                "No charts available. Run optimization and crossing to generate interactive charts."
+            )
+            
+            # Update all tabs
+            self.tabs.children = [
+                self.config_container,
+                self.optimization_container,
+                self.crossing_container, 
+                self.dashboard_container
+            ]
+            
+            # Clear UI references
+            self.optimization_ui = None
+            self.crossing_ui = None
+            self.dashboard_ui = None
+            
+            # Update tab titles
+            self._update_tab_titles()
+            
+            self.logger.info("All result tabs cleared successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Error clearing tabs: {str(e)}")
+    
+    # === CHART GENERATION METHODS ===
+    
+    def _generate_portfolio_charts(self, batch_results, analysis_results):
+        """Generate portfolio analysis charts and store in workflow state."""
+        try:
+            if not CHARTS_AVAILABLE:
+                self.logger.info("Chart generation skipped - visualization managers not available")
+                return
+            
+            self.logger.info("Generating portfolio analysis charts...")
+            
+            # For now, generate charts for the first successful portfolio
+            # You could extend this to generate charts for all portfolios
+            for portfolio_id, result in batch_results.items():
+                if (result.status == "SUCCESS" and 
+                    result.clean_holdings_data is not None and
+                    result.proposed_trades_df is not None):
+                    
+                    # Get analysis result for this portfolio
+                    analysis_result = analysis_results.get(portfolio_id)
+                    if analysis_result:
+                        # Generate charts using portfolio visualization manager
+                        viz_manager = PortfolioVisualizationManager(analysis_result)
+                        portfolio_charts = viz_manager.create_all_charts()
+                        
+                        # Store in workflow state
+                        self.workflow_state.set_portfolio_charts(portfolio_charts)
+                        
+                        self.logger.info(f"Generated {len(portfolio_charts)} portfolio charts")
+                        
+                        # Trigger dashboard build
+                        self._build_charts_dashboard()
+                        break
+            
+        except Exception as e:
+            self.logger.error(f"Error generating portfolio charts: {str(e)}")
+    
+    def _generate_crossing_charts(self, crossing_result):
+        """Generate crossing analysis charts and store in workflow state."""
+        try:
+            if not CHARTS_AVAILABLE:
+                self.logger.info("Crossing chart generation skipped - visualization managers not available")
+                return
+            
+            self.logger.info("Generating crossing analysis charts...")
+            
+            # Generate charts using crossing visualization manager
+            viz_manager = CrossingVisualizationManager(crossing_result)
+            crossing_charts = viz_manager.create_all_charts()
+            
+            # Store in workflow state
+            self.workflow_state.set_crossing_charts(crossing_charts)
+            
+            self.logger.info(f"Generated {len(crossing_charts)} crossing charts")
+            
+            # Trigger dashboard build/update
+            self._build_charts_dashboard()
+            
+        except Exception as e:
+            self.logger.error(f"Error generating crossing charts: {str(e)}")
+    
+    # === UTILITY METHODS ===
+    
+    def _show_error_in_tab(self, tab_index: int, error_message: str):
+        """Show error message in specific tab."""
+        error_container = widgets.VBox([
+            widgets.HTML(f"""
+                <div style='text-align: center; padding: 50px; color: #d32f2f;'>
+                    <h3>Error</h3>
+                    <p>{error_message}</p>
+                    <p><i>Check the execution log in the configuration tab for details.</i></p>
+                </div>
+            """)
+        ])
         
-        Args:
-            batch_results: Dictionary of portfolio_id -> OptimizationResult
-            analysis_results: Optional dictionary of portfolio_id -> PortfolioComparisonResult
-        """
-        self.optimization_results = batch_results
-        if analysis_results:
-            self.analysis_results = analysis_results
-        
-        # Recreate the optimization UI
-        self.optimization_ui = None
-        new_container = self._create_optimization_tab()
-        
-        # Replace the tab content
+        # Update the specific tab
         tab_children = list(self.tabs.children)
-        tab_children[1] = new_container
+        tab_children[tab_index] = error_container
         self.tabs.children = tab_children
-        
-        # Update tab title
-        self._update_tab_titles()
-        
-        self.logger.info(f"Updated optimization results for {len(batch_results)} portfolios")
-    
-    def update_crossing_results(self, crossing_result: CrossingResult):
-        """
-        Update crossing results data and refresh the tab.
-        
-        Args:
-            crossing_result: CrossingResult from crossing analysis
-        """
-        self.crossing_result = crossing_result
-        
-        # Recreate the crossing UI
-        self.crossing_ui = None
-        new_container = self._create_crossing_tab()
-        
-        # Replace the tab content
-        tab_children = list(self.tabs.children)
-        tab_children[2] = new_container
-        self.tabs.children = tab_children
-        
-        # Update tab title
-        self._update_tab_titles()
-        
-        self.logger.info("Updated crossing results")
-    
-    def update_charts_data(self, 
-                          crossing_charts: Optional[Dict[str, Any]] = None,
-                          portfolio_charts: Optional[Dict[str, Any]] = None):
-        """
-        Update charts data and refresh the dashboard.
-        
-        Args:
-            crossing_charts: Dictionary of crossing analysis charts
-            portfolio_charts: Dictionary of portfolio analysis charts
-        """
-        if crossing_charts:
-            self.charts_data['crossing'] = crossing_charts
-        
-        if portfolio_charts:
-            self.charts_data['portfolio'] = portfolio_charts
-        
-        # Recreate the dashboard UI
-        self.dashboard_ui = None
-        new_container = self._create_dashboard_tab()
-        
-        # Replace the tab content
-        tab_children = list(self.tabs.children)
-        tab_children[3] = new_container
-        self.tabs.children = tab_children
-        
-        # Update tab title
-        self._update_tab_titles()
-        
-        chart_sources = []
-        if crossing_charts:
-            chart_sources.append(f"{len(crossing_charts)} crossing")
-        if portfolio_charts:
-            chart_sources.append(f"{len(portfolio_charts)} portfolio")
-        
-        self.logger.info(f"Updated charts data: {', '.join(chart_sources)} charts")
-    
-    def refresh_all_tabs(self):
-        """Force refresh all tabs by recreating their content."""
-        # Recreate all tab containers
-        new_children = [
-            self._create_config_tab(),
-            self._create_optimization_tab(),
-            self._create_crossing_tab(),
-            self._create_dashboard_tab()
-        ]
-        
-        self.tabs.children = new_children
-        self._update_tab_titles()
-        
-        self.logger.info("Refreshed all tabs")
-    
-    def get_config_manager(self) -> Optional[PortfolioConfigManager]:
-        """Get the current configuration manager."""
-        if self.config_ui:
-            return self.config_ui.get_config_manager()
-        return self.config_manager
-    
-    def get_global_settings(self) -> Optional[Dict[str, Any]]:
-        """Get the current global settings from configuration."""
-        if self.config_ui:
-            return self.config_ui.get_global_settings()
-        return None
     
     def navigate_to_tab(self, tab_index: int):
-        """
-        Navigate to a specific tab.
-        
-        Args:
-            tab_index: Tab index (0=Config, 1=Optimization, 2=Crossing, 3=Charts)
-        """
+        """Navigate to a specific tab."""
         if 0 <= tab_index < len(self.tabs.children):
             self.tabs.selected_index = tab_index
         else:
             self.logger.warning(f"Invalid tab index: {tab_index}")
     
-    def get_workflow_status(self) -> Dict[str, bool]:
-        """
-        Get the status of each workflow component.
-        
-        Returns:
-            Dictionary indicating completion status of each step
-        """
+    def get_workflow_status(self) -> Dict[str, Any]:
+        """Get comprehensive workflow status."""
         return {
-            'configuration_set': self.config_ui is not None,
-            'optimization_complete': bool(self.optimization_results),
-            'crossing_complete': self.crossing_result is not None,
-            'charts_available': bool(self.charts_data)
+            'workflow_state': self.workflow_state.get_status_summary(),
+            'ui_components': {
+                'config_ui': self.config_ui is not None,
+                'optimization_ui': self.optimization_ui is not None,
+                'crossing_ui': self.crossing_ui is not None,
+                'dashboard_ui': self.dashboard_ui is not None
+            },
+            'execution_components': {
+                'report_handler': self.report_handler is not None,
+                'orchestrator': self.orchestrator is not None,
+                'crossing_engine': self.crossing_engine is not None
+            }
         }
     
     def reset_workflow(self):
-        """Reset all workflow data and UI components."""
-        # Clear data
-        self.optimization_results = {}
-        self.analysis_results = {}
-        self.crossing_result = None
-        self.charts_data = {}
-        
-        # Clear UI references
-        self.optimization_ui = None
-        self.crossing_ui = None
-        self.dashboard_ui = None
-        
-        # Refresh all tabs
-        self.refresh_all_tabs()
-        
-        # Navigate back to configuration
-        self.navigate_to_tab(0)
-        
-        self.logger.info("Workflow reset")
+        """Reset entire workflow to initial state."""
+        try:
+            self.logger.info("Resetting entire workflow...")
+            
+            # Reset workflow state
+            self.workflow_state.reset_all()
+            
+            # Clear all tabs
+            self._clear_all_tabs()
+            
+            # Navigate back to configuration tab
+            self.navigate_to_tab(0)
+            
+            # Reset config UI if needed
+            if self.config_ui:
+                self.config_ui.execution_status = "ready"
+                self.config_ui._set_execution_state("ready")
+            
+            self.logger.info("Workflow reset completed")
+            
+        except Exception as e:
+            self.logger.error(f"Error resetting workflow: {str(e)}")
     
     def display(self):
         """Display the comprehensive workflow UI."""
@@ -347,65 +455,37 @@ class ComprehensiveWorkflowUI:
 
 
 def create_comprehensive_workflow_ui(config_manager: Optional[PortfolioConfigManager] = None,
-                                   optimization_results: Optional[Dict[str, OptimizationResult]] = None,
-                                   analysis_results: Optional[Dict[str, PortfolioComparisonResult]] = None,
-                                   crossing_result: Optional[CrossingResult] = None,
-                                   crossing_charts: Optional[Dict[str, Any]] = None,
-                                   portfolio_charts: Optional[Dict[str, Any]] = None) -> ComprehensiveWorkflowUI:
+                                   report_handler=None,
+                                   orchestrator=None, 
+                                   crossing_engine=None) -> ComprehensiveWorkflowUI:
     """
-    Convenience function to create and display the comprehensive workflow UI.
+    Create and display the comprehensive workflow UI with reactive tab building.
     
     Args:
         config_manager: Optional existing PortfolioConfigManager
-        optimization_results: Optional optimization results to pre-load
-        analysis_results: Optional analysis results to pre-load
-        crossing_result: Optional crossing result to pre-load
-        crossing_charts: Optional crossing charts to pre-load
-        portfolio_charts: Optional portfolio charts to pre-load
+        report_handler: ReportHandler instance for data retrieval
+        orchestrator: OptimizationOrchestrator instance
+        crossing_engine: PortfolioCrossingEngine instance
         
     Returns:
         ComprehensiveWorkflowUI instance
     """
     ui = ComprehensiveWorkflowUI(
         config_manager=config_manager,
-        optimization_results=optimization_results,
-        analysis_results=analysis_results,
-        crossing_result=crossing_result,
-        crossing_charts=crossing_charts,
-        portfolio_charts=portfolio_charts
+        report_handler=report_handler,
+        orchestrator=orchestrator,
+        crossing_engine=crossing_engine
     )
     ui.display()
     return ui
 
 
-# Example usage functions for integration
-def example_workflow_integration():
-    """
-    Example of how to use the comprehensive UI with pre-loaded data.
-    """
-    # Option 1: Create empty workflow and populate later
-    workflow_ui = create_comprehensive_workflow_ui()
-    
-    # Option 2: Pre-load with optimization results
-    # workflow_ui = create_comprehensive_workflow_ui(
-    #     optimization_results=batch_results,
-    #     analysis_results=analysis_results
-    # )
-    
-    # Option 3: Pre-load with all data
-    # workflow_ui = create_comprehensive_workflow_ui(
-    #     config_manager=config_manager,
-    #     optimization_results=batch_results,
-    #     analysis_results=analysis_results,
-    #     crossing_result=crossing_result,
-    #     crossing_charts=crossing_charts,
-    #     portfolio_charts=portfolio_charts
-    # )
-    
-    return workflow_ui
-
-
+# Example usage
 if __name__ == "__main__":
-    # This would be used in a Jupyter notebook like:
-    # workflow_ui = create_comprehensive_workflow_ui()
+    # Create workflow UI with execution components
+    # workflow_ui = create_comprehensive_workflow_ui(
+    #     report_handler=report_handler,
+    #     orchestrator=orchestrator,
+    #     crossing_engine=crossing_engine
+    # )
     pass
