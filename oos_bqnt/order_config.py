@@ -26,6 +26,8 @@ class CrossedTradesConfig:
     time_in_force_column: str | None = None  # Optional: defaults to DAY
     settl_date_column: str | None = None  # Optional: settlement date (format: YYYYMMDD or +days)
     exchange_column: str | None = None  # Optional: exchange code for securities requiring it
+    instructions_column: str = None  # Optional: for future use
+    long_notes_column: str | None = None
 
 
 @dataclass
@@ -48,3 +50,4 @@ class RemainingTradesConfig:
     settl_date_column: str | None = None  # Optional: settlement date (format: YYYYMMDD or +days)
     exchange_column: str | None = None  # Optional: exchange code for securities requiring it
     instructions_column: str = None  # Optional: for future use
+    long_notes_column: str | None = None

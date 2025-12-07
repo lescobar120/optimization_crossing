@@ -1,7 +1,7 @@
 """
 XML Builder for Basket Orders
 
-Builds XML requests for Bloomberg AIM basket orders.
+Builds XML requests for AIM basket orders.
 Handles crossed orders (with CROSS broker) and standard orders.
 """
 
@@ -10,7 +10,7 @@ import datetime
 import logging
 import lxml.etree as ET
 
-from enums import (
+from .enums import (
     FlowControlTag,
     ListProcessingLevel,
     CheckPretradeCompliance,
@@ -19,7 +19,7 @@ from enums import (
     Side,
     TimeInForce,
 )
-from order_types import SingleAllocation
+from .order_types import SingleAllocation
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +200,7 @@ class BasketOrderXMLBuilder:
         uuid_val: str = "26656679",
         time_in_force: TimeInForce | None = None,
         instructions: str | None = None,
+        long_notes: str | None = None, 
         broker: str | None = None,
     ):
         """
@@ -328,6 +329,9 @@ class BasketOrderXMLBuilder:
         notes = ET.SubElement(order, "BBNotes")
         if instructions:
             _text(notes, "Text", instructions)
+        
+        if long_notes:
+            _text(order, "Txt", long_notes)
         
         return order
 

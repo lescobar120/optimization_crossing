@@ -10,7 +10,7 @@ import json
 import logging
 import lxml.etree as ET
 
-from enums import ComplianceStatus  # Import from enums.py instead of base
+from .enums import ComplianceStatus  # Import from enums.py instead of base
 
 logger = logging.getLogger(__name__)
 

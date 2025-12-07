@@ -6,7 +6,7 @@ Named tuples and data structures used throughout the system.
 
 from collections import namedtuple
 from typing import NamedTuple
-from enums import PartyRole
+from .enums import PartyRole
 
 
 # Named tuples for allocation and party details

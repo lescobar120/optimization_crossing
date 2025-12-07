@@ -9,7 +9,7 @@ import pandas as pd
 import re
 from typing import List, Tuple
 
-from order_config import CrossedTradesConfig, RemainingTradesConfig
+from .order_config import CrossedTradesConfig, RemainingTradesConfig
 
 
 class ValidationError(Exception):
